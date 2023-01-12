@@ -31,9 +31,23 @@
 #include "pico/multicore.h"
 #include "pico/bootrom.h"
 
+
 #include "pio_usb.h"
 #include "tusb.h"
 #include "main.h"
+
+#define DEBUG 0
+
+#ifdef DEBUG
+#include "hardware/uart.h"
+#define UART_ID uart0
+#define BAUD_RATE 115200
+#define DATA_BITS 8
+#define STOP_BITS 1
+#define PARITY    UART_PARITY_NONE
+#define UART_TX_PIN 12
+#define UART_RX_PIN 13
+#endif
 
 #define MOUSEX  0
 #define MOUSEY  1
@@ -74,15 +88,13 @@ void gpio_set_mode_open_drain(uint gpio) {
 
 void core1_main() {
   sleep_ms(10);
-
-  // Use tuh_configure() to pass pio configuration to the host stack
-  // Note: tuh_configure() must be called before
   pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
-  tuh_configure(1, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
+  pio_cfg.pin_dp = PIO_USB_DP_PIN;
+  tuh_configure(CFG_TUH_RPI_PIO_USB, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
 
   // To run USB SOF interrupt in core1, init host stack for pio_usb (roothub
   // port1) on core1
-  tuh_init(1);
+  tuh_init(CFG_TUH_RPI_PIO_USB);
 
   while (true) {
     tuh_task(); // tinyusb host task
@@ -92,10 +104,35 @@ void core1_main() {
 int main() {
   // default 125MHz is not appropreate. Sysclock should be multiple of 12MHz.
   set_sys_clock_khz(120000, true);
+  stdio_init_all();
 
-
-  multicore_reset_core1();
+  #ifdef DEBUG
+  // Setup Debug to UART
+  uart_init(UART_ID, 2400);
+  gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
+  gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
+  int __unused actual = uart_set_baudrate(UART_ID, BAUD_RATE);
+  uart_set_hw_flow(UART_ID, false, false);
+  uart_set_format(UART_ID, DATA_BITS, STOP_BITS, PARITY);
+  uart_puts(uart0, "RP2040 USB To Quadrature Booting.....\n");
+  #endif  
+  
   // all USB task run in core1
+  multicore_reset_core1();
+  #ifdef DEBUG
+  uart_puts(uart0, "Core1 Reset\n");
+  #endif
+
+  multicore_launch_core1(core1_main);
+  #ifdef DEBUG
+  uart_puts(uart0, "Core1 Launched\n");
+  #endif
+
+  // Initialise the RP2040 hardware
+  initialiseHardware();
+  #ifdef DEBUG
+  uart_puts(uart0, "Hardware Initalized\n");
+  #endif
   
   // Blink Status LED and wait for everything to settle
   int8_t i=0;
@@ -103,17 +140,20 @@ int main() {
     gpio_put(STATUS_PIN, 1);
     sleep_ms(200);
     gpio_put(STATUS_PIN, 0);
+    sleep_ms(200);
     i++;
   }
 
-  multicore_launch_core1(core1_main);
-
-  // Initialise the RP2040 hardware
-  initialiseHardware();
-  
   // Initialise the timers
+
   initialiseTimers();
-  while (true) {
+  #ifdef DEBUG
+  uart_puts(uart0, "Timers Running\n");
+  #endif
+
+
+while (true) {
+    stdio_flush();
     sleep_us(10);
   }
 }
@@ -141,9 +181,9 @@ void initialiseHardware(void)
   gpio_set_dir(STATUS_PIN, GPIO_OUT);
 
   // Set the pins low
-  gpio_put(RB_PIN, 0);
-  gpio_put(MB_PIN, 0);
-  gpio_put(LB_PIN, 0);
+  gpio_put(RB_PIN, 1);
+  gpio_put(MB_PIN, 1);
+  gpio_put(LB_PIN, 1);
   gpio_put(XA_PIN, 0);
   gpio_put(XB_PIN, 0);
   gpio_put(YA_PIN, 0);
@@ -151,9 +191,9 @@ void initialiseHardware(void)
   gpio_put(STATUS_PIN, 0);
 
   // Set buttons to be open drain
-  gpio_set_mode_open_drain(RB_PIN);
-  gpio_set_mode_open_drain(MB_PIN);
-  gpio_set_mode_open_drain(LB_PIN);
+  //gpio_set_mode_open_drain(RB_PIN);
+  //gpio_set_mode_open_drain(MB_PIN);
+  //gpio_set_mode_open_drain(LB_PIN);
 }
 
 
@@ -235,15 +275,26 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
 {
   (void)desc_report;
   (void)desc_len;
+  #ifdef DEBUG
+  uart_puts(uart0, "Device Attached\n");
+  #endif
 
+  gpio_put(STATUS_PIN, 1); // Turn status LED on
   // Interface protocol (hid_interface_protocol_enum_t)
   uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
+
+  #ifdef DEBUG
+  char output[255];
+  sprintf(output, "Protocol: %d\n", itf_protocol);
+  uart_puts(uart0, output);
+  #endif
+
 
   // Receive report from boot mouse only
   // tuh_hid_report_received_cb() will be invoked when report is available
   if (itf_protocol == HID_ITF_PROTOCOL_MOUSE)
   {
-    if ( !tuh_hid_receive_report(dev_addr, instance) )
+    if ( tuh_hid_receive_report(dev_addr, instance) )
     {
         gpio_put(STATUS_PIN, 1); // Turn status LED on
     }
@@ -255,6 +306,9 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
   (void)dev_addr;
   (void)instance;
+  #ifdef DEBUG
+  uart_puts(uart0, "Device Removed\n");
+  #endif
   gpio_put(STATUS_PIN, 0); // Turn status LED off
 }
 
@@ -262,29 +316,29 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 static void processMouse(uint8_t dev_addr, hid_mouse_report_t const * report)
 {
   // Blink status LED
-  gpio_put(STATUS_PIN, 0);
+  //gpio_put(STATUS_PIN, 0);
   (void)dev_addr;
 
   // Handle mouse buttons
   // Check for left mouse button
   if (report->buttons & MOUSE_BUTTON_LEFT) {
-    gpio_put(LB_PIN, 1);
-  } else {
     gpio_put(LB_PIN, 0);
+  } else {
+    gpio_put(LB_PIN, 1);
   }
     
   // Check for middle mouse button
   if (report->buttons & MOUSE_BUTTON_MIDDLE) {
-    gpio_put(MB_PIN, 1);
-  } else {
     gpio_put(MB_PIN, 0);
+  } else {
+    gpio_put(MB_PIN, 1);
   }
     
   // Check for right mouse button
   if (report->buttons & MOUSE_BUTTON_RIGHT) {
-    gpio_put(RB_PIN, 1);
-  } else {
     gpio_put(RB_PIN, 0);
+  } else {
+    gpio_put(RB_PIN, 1);
   }
 
   // Handle mouse movement
@@ -316,7 +370,7 @@ static void processMouse(uint8_t dev_addr, hid_mouse_report_t const * report)
   processMouseMovement(report->x, MOUSEX);
   processMouseMovement(report->y, MOUSEY);
   // Blink status LED
-  gpio_put(STATUS_PIN, 1);
+  //gpio_put(STATUS_PIN, 1);
 }
 
 void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
