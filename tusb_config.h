@@ -40,9 +40,6 @@
 #define CFG_TUH_ENABLED     1
 #define CFG_TUH_RPI_PIO_USB 1
 
-#define PIO_USB_DP_PIN_DEFAULT 9
-#define PIO_USB_DM_PIN_DEFAULT 8
-
 // CFG_TUSB_DEBUG is defined by compiler in DEBUG build
 // #define CFG_TUSB_DEBUG           0
 

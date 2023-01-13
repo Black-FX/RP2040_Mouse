@@ -46,8 +46,6 @@
 // Mouse Status LED
 #define STATUS_PIN	7
 
-#define PIO_USB_DP_PIN        20
-
 // Function prototypes
 void initialiseHardware(void);
 void initialiseTimers(void);
