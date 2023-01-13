@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 set(PICO_SDK_FETCH_FROM_GIT on)
-include (pico_sdk_import.cmake)
+include ($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
 project(rp2040_mouse)
 enable_language( C CXX ASM )
