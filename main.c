@@ -76,7 +76,9 @@ volatile int8_t mouseEncoderPhaseY = 0; // Y Quadrature phase (0-3)
 
 volatile int16_t mouseDistanceX = 0; // Distance left for mouse to move
 volatile int16_t mouseDistanceY = 0; // Distance left for mouse to move
-volatile bool mouseConnected = 0;
+
+struct repeating_timer timer1;
+struct repeating_timer timer2;
 
 void gpio_set_mode_open_drain(uint gpio)
 {
@@ -103,6 +105,81 @@ void core1_main()
   {
     tuh_task(); // tinyusb host task
   }
+}
+
+bool timer1_callback(struct repeating_timer *t)
+{
+  // Silence compilation warning
+  (void)t;
+  // Process X output
+  if (mouseDistanceX > 0)
+  {
+    // Change phase and range check
+    if (mouseDirectionX == 0)
+    {
+      mouseEncoderPhaseX--;
+      if (mouseEncoderPhaseX < 0)
+        mouseEncoderPhaseX = 3;
+    }
+    else
+    {
+      mouseEncoderPhaseX++;
+      if (mouseEncoderPhaseX > 3)
+        mouseEncoderPhaseX = 0;
+    }
+
+    // Set the output pins according to the current phase
+    if (mouseEncoderPhaseX == 0)
+      gpio_put(XA_PIN, 1); // Set X1 to 1
+    if (mouseEncoderPhaseX == 1)
+      gpio_put(XB_PIN, 1); // Set X2 to 1
+    if (mouseEncoderPhaseX == 2)
+      gpio_put(XA_PIN, 0); // Set X1 to 0
+    if (mouseEncoderPhaseX == 3)
+      gpio_put(XB_PIN, 0); // Set X2 to 0
+
+    // Decrement the distance left to move
+    mouseDistanceX--;
+  }
+  return true;
+}
+
+// Interrupt Service Routine based on Timer2 for mouse Y movement quadrature output
+bool timer2_callback(struct repeating_timer *t)
+{
+  // Silence compilation warning
+  (void)t;
+  // Process Y output
+  if (mouseDistanceY > 0)
+  {
+    // Change phase and range check
+    if (mouseDirectionY == 0)
+    {
+      mouseEncoderPhaseY--;
+      if (mouseEncoderPhaseY < 0)
+        mouseEncoderPhaseY = 3;
+    }
+    else
+    {
+      mouseEncoderPhaseY++;
+      if (mouseEncoderPhaseY > 3)
+        mouseEncoderPhaseY = 0;
+    }
+
+    // Set the output pins according to the current phase
+    if (mouseEncoderPhaseY == 3)
+      gpio_put(YA_PIN, 0); // Set Y1 to 0
+    if (mouseEncoderPhaseY == 2)
+      gpio_put(YB_PIN, 0); // Set Y2 to 0
+    if (mouseEncoderPhaseY == 1)
+      gpio_put(YA_PIN, 1); // Set Y1 to 1
+    if (mouseEncoderPhaseY == 0)
+      gpio_put(YB_PIN, 1); // Set Y2 to 1
+
+    // Decrement the distance left to move
+    mouseDistanceY--;
+  }
+  return true;
 }
 
 int main()
@@ -152,8 +229,6 @@ int main()
   }
 
   // Initialise the timers
-  initialiseTimers();
-  printf("Timers Running\r\n");
   while (true)
   {
     stdio_flush();
@@ -199,98 +274,6 @@ void initialiseHardware(void)
   // gpio_set_mode_open_drain(LB_PIN);
 }
 
-bool timer1_callback(struct repeating_timer *t)
-{
-  if (mouseConnected == 1)
-  {
-    // Silence compilation warning
-    (void)t;
-    // Process X output
-    if (mouseDistanceX > 0)
-    {
-      // Change phase and range check
-      if (mouseDirectionX == 0)
-      {
-        mouseEncoderPhaseX--;
-        if (mouseEncoderPhaseX < 0)
-          mouseEncoderPhaseX = 3;
-      }
-      else
-      {
-        mouseEncoderPhaseX++;
-        if (mouseEncoderPhaseX > 3)
-          mouseEncoderPhaseX = 0;
-      }
-
-      // Set the output pins according to the current phase
-      if (mouseEncoderPhaseX == 0)
-        gpio_put(XA_PIN, 1); // Set X1 to 1
-      if (mouseEncoderPhaseX == 1)
-        gpio_put(XB_PIN, 1); // Set X2 to 1
-      if (mouseEncoderPhaseX == 2)
-        gpio_put(XA_PIN, 0); // Set X1 to 0
-      if (mouseEncoderPhaseX == 3)
-        gpio_put(XB_PIN, 0); // Set X2 to 0
-
-      // Decrement the distance left to move
-      mouseDistanceX--;
-    }
-    printf(".");
-  }
-  return true;
-}
-
-// Interrupt Service Routine based on Timer2 for mouse Y movement quadrature output
-bool timer2_callback(struct repeating_timer *t)
-{
-  if (mouseConnected == 1)
-  {
-    // Silence compilation warning
-    (void)t;
-    // Process Y output
-    if (mouseDistanceY > 0)
-    {
-      // Change phase and range check
-      if (mouseDirectionY == 0)
-      {
-        mouseEncoderPhaseY--;
-        if (mouseEncoderPhaseY < 0)
-          mouseEncoderPhaseY = 3;
-      }
-      else
-      {
-        mouseEncoderPhaseY++;
-        if (mouseEncoderPhaseY > 3)
-          mouseEncoderPhaseY = 0;
-      }
-
-      // Set the output pins according to the current phase
-      if (mouseEncoderPhaseY == 3)
-        gpio_put(YA_PIN, 0); // Set Y1 to 0
-      if (mouseEncoderPhaseY == 2)
-        gpio_put(YB_PIN, 0); // Set Y2 to 0
-      if (mouseEncoderPhaseY == 1)
-        gpio_put(YA_PIN, 1); // Set Y1 to 1
-      if (mouseEncoderPhaseY == 0)
-        gpio_put(YB_PIN, 1); // Set Y2 to 1
-
-      // Decrement the distance left to move
-      mouseDistanceY--;
-    }
-    printf("+");
-  }
-  return true;
-}
-
-// Initialise the ISR timers
-void initialiseTimers(void)
-{
-  // Set timers to 260us for now which is ~3.9kHz
-  struct repeating_timer timer1;
-  struct repeating_timer timer2;
-  add_repeating_timer_us(-260, timer1_callback, NULL, &timer1);
-  add_repeating_timer_us(-260, timer2_callback, NULL, &timer2);
-}
 //--------------------------------------------------------------------+
 // Host HID
 //--------------------------------------------------------------------+
@@ -316,8 +299,10 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
   {
     if (tuh_hid_receive_report(dev_addr, instance))
     {
-      mouseConnected = 1;
       gpio_put(STATUS_PIN, 1); // Turn status LED on
+      add_repeating_timer_ms(-10, timer1_callback, NULL, &timer1);
+      add_repeating_timer_ms(-10, timer2_callback, NULL, &timer2);
+      printf("Timers Running\r\n");
     }
   }
 }
@@ -327,9 +312,12 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
   (void)dev_addr;
   (void)instance;
-  mouseConnected = 0;
   printf("Device Removed\r\n");
   gpio_put(STATUS_PIN, 0); // Turn status LED off
+  bool cancelled = cancel_repeating_timer(&timer1);
+  printf("Timer1 Cancelled... %d\r\n", cancelled);
+  cancelled = cancel_repeating_timer(&timer2);
+  printf("Timer2 Cancelled... %d\r\n", cancelled);
 }
 
 static void processMouse(uint8_t dev_addr, hid_mouse_report_t const *report)
@@ -337,7 +325,6 @@ static void processMouse(uint8_t dev_addr, hid_mouse_report_t const *report)
   // Blink status LED
   // gpio_put(STATUS_PIN, 0);
   (void)dev_addr;
-  printf("%02x\r\n", mouseConnected);
   // Handle scroll wheel
   if (report->wheel)
   {
