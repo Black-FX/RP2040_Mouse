@@ -32,6 +32,7 @@
 #include "pico/bootrom.h"
 
 #define PIO_USB_DP_PIN_DEFAULT 8
+
 #define VERSION "0.1"
 
 #include "pio_usb.h"
@@ -239,9 +240,6 @@ int main()
 void initialiseHardware(void)
 {
   // Initalize the pins
-  gpio_init(RB_PIN);
-  gpio_init(MB_PIN);
-  gpio_init(LB_PIN);
   gpio_init(XA_PIN);
   gpio_init(XB_PIN);
   gpio_init(YB_PIN);
@@ -249,9 +247,6 @@ void initialiseHardware(void)
   gpio_init(STATUS_PIN);
 
   // Set pin directions
-  gpio_set_dir(RB_PIN, GPIO_OUT);
-  gpio_set_dir(MB_PIN, GPIO_OUT);
-  gpio_set_dir(LB_PIN, GPIO_OUT);
   gpio_set_dir(XA_PIN, GPIO_OUT);
   gpio_set_dir(XB_PIN, GPIO_OUT);
   gpio_set_dir(YA_PIN, GPIO_OUT);
@@ -259,19 +254,12 @@ void initialiseHardware(void)
   gpio_set_dir(STATUS_PIN, GPIO_OUT);
 
   // Set the pins low
-  gpio_put(RB_PIN, 1);
-  gpio_put(MB_PIN, 1);
-  gpio_put(LB_PIN, 1);
   gpio_put(XA_PIN, 0);
   gpio_put(XB_PIN, 0);
   gpio_put(YA_PIN, 0);
   gpio_put(YB_PIN, 0);
   gpio_put(STATUS_PIN, 0);
 
-  // Set buttons to be open drain
-  // gpio_set_mode_open_drain(RB_PIN);
-  // gpio_set_mode_open_drain(MB_PIN);
-  // gpio_set_mode_open_drain(LB_PIN);
 }
 
 //--------------------------------------------------------------------+
@@ -300,8 +288,8 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
     if (tuh_hid_receive_report(dev_addr, instance))
     {
       gpio_put(STATUS_PIN, 1); // Turn status LED on
-      add_repeating_timer_ms(-10, timer1_callback, NULL, &timer1);
-      add_repeating_timer_ms(-10, timer2_callback, NULL, &timer2);
+      add_repeating_timer_ms(-1, timer1_callback, NULL, &timer1);
+      add_repeating_timer_ms(-1, timer2_callback, NULL, &timer2);
       printf("Timers Running\r\n");
     }
   }
@@ -328,47 +316,49 @@ static void processMouse(uint8_t dev_addr, hid_mouse_report_t const *report)
   // Handle scroll wheel
   if (report->wheel)
   {
+    gpio_init(MB_PIN);
+    gpio_set_dir(MB_PIN,GPIO_OUT);
     gpio_put(MB_PIN, 1);
     printf("Wheel %02x\r\n", report->wheel);
     processMouseMovement(report->wheel, MOUSEY);
-    gpio_put(MB_PIN, 0);
+    gpio_deinit(MB_PIN);
   }
 
   // Handle mouse buttons
   // Check for left mouse button
   if (report->buttons & MOUSE_BUTTON_LEFT)
   {
+    gpio_init(LB_PIN);
+    gpio_set_dir(LB_PIN,GPIO_OUT);
     gpio_put(LB_PIN, 0);
-    printf("Left Click\r\n");
   }
   else
   {
-    gpio_put(LB_PIN, 1);
-    printf("Left Unclick\r\n");
+    gpio_deinit(LB_PIN);
   }
 
   // Check for middle mouse button
   if (report->buttons & MOUSE_BUTTON_MIDDLE)
   {
+    gpio_init(MB_PIN);
+    gpio_set_dir(MB_PIN,GPIO_OUT);
     gpio_put(MB_PIN, 0);
-    printf("Middle Click\r\n");
   }
   else
   {
-    gpio_put(MB_PIN, 1);
-    printf("Middle Unclick\r\n");
+    gpio_deinit(MB_PIN);
   }
 
   // Check for right mouse button
   if (report->buttons & MOUSE_BUTTON_RIGHT)
   {
+    gpio_init(RB_PIN);
+    gpio_set_dir(RB_PIN,GPIO_OUT);
     gpio_put(RB_PIN, 0);
-    printf("Right Click\r\n");
   }
   else
   {
-    gpio_put(RB_PIN, 1);
-    printf("Right Unclick\r\n");
+    gpio_deinit(RB_PIN);
   }
 
   // Handle mouse movement
@@ -376,26 +366,22 @@ static void processMouse(uint8_t dev_addr, hid_mouse_report_t const *report)
   {
     mouseDistanceX = 0;
     mouseDirectionX = 1;
-    printf("X++\r\n");
   }
   else if (report->x < 0 && mouseDirectionX == 1)
   {
     mouseDistanceX = 0;
     mouseDirectionX = 0;
-    printf("X--\r\n");
   }
 
   if (report->y > 0 && mouseDirectionY == 0)
   {
     mouseDistanceY = 0;
     mouseDirectionY = 1;
-    printf("Y++\r\n");
   }
   else if (report->y < 0 && mouseDirectionY == 1)
   {
     mouseDistanceY = 0;
     mouseDirectionY = 0;
-    printf("Y--\r\n");
   }
 
   // Process mouse X and Y movement
