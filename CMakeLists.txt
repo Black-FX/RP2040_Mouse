@@ -13,7 +13,6 @@ add_executable(${target_name})
 
 target_sources(${target_name} PRIVATE
  main.c
- # usb_descriptors.c
  ${PICO_TINYUSB_PATH}/src/portable/raspberrypi/pio_usb/hcd_pio_usb.c
  )
 
