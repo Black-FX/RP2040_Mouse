@@ -31,9 +31,13 @@
 #include "pico/multicore.h"
 #include "pico/bootrom.h"
 
+// Override default USB pin
 #define PIO_USB_DP_PIN_DEFAULT 8
 
 #define VERSION "0.1"
+// Configure RP2040 for slower flash
+#define PICO_XOSC_STARTUP_DELAY_MULTIPLIER 64
+#define PICO_BOOT_STAGE2_CHOOSE_GENERIC_03H 1
 
 #include "pio_usb.h"
 #include "tusb.h"
