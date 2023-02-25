@@ -180,6 +180,21 @@ bool timer2_callback(struct repeating_timer *t)
   return true;
 }
 
+static void blink_status(uint8_t count)
+{
+uint8_t i=0;
+gpio_put(STATUS_PIN, 0);
+  
+  while (i < count)
+  {
+    sleep_ms(200);
+    gpio_put(STATUS_PIN, 1);
+    sleep_ms(200);
+    gpio_put(STATUS_PIN, 0);
+    i++;
+  }
+}
+
 int main()
 {
   // default 125MHz is not appropreate. Sysclock should be multiple of 12MHz.
@@ -216,15 +231,7 @@ int main()
   printf("Hardware Initalized\r\n");
 
   // Blink Status LED and wait for everything to settle
-  int8_t i = 0;
-  while (i < 10)
-  {
-    gpio_put(STATUS_PIN, 1);
-    sleep_ms(200);
-    gpio_put(STATUS_PIN, 0);
-    sleep_ms(200);
-    i++;
-  }
+  blink_status(10);
 
   // Initialise the timers
   while (true)
@@ -259,6 +266,7 @@ void initialiseHardware(void)
 
 }
 
+
 //--------------------------------------------------------------------+
 // Host HID
 //--------------------------------------------------------------------+
@@ -270,7 +278,6 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
   (void)desc_len;
   printf("Device Attached\r\n");
 
-  gpio_put(STATUS_PIN, 1); // Turn status LED on
   // Interface protocol (hid_interface_protocol_enum_t)
   uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
 
@@ -284,12 +291,13 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
   {
     if (tuh_hid_receive_report(dev_addr, instance))
     {
-      gpio_put(STATUS_PIN, 1); // Turn status LED on
       add_repeating_timer_ms(-1, timer1_callback, NULL, &timer1);
       add_repeating_timer_ms(-1, timer2_callback, NULL, &timer2);
       printf("Timers Running\r\n");
+      blink_status(3);
     }
   }
+  gpio_put(STATUS_PIN, 1); // Turn status LED on
 }
 
 // Invoked when device with hid interface is un-mounted
@@ -384,8 +392,6 @@ static void processMouse(uint8_t dev_addr, hid_mouse_report_t const *report)
   // Process mouse X and Y movement
   processMouseMovement(report->x, MOUSEX);
   processMouseMovement(report->y, MOUSEY);
-  // Blink status LED
-  // gpio_put(STATUS_PIN, 1);
 }
 
 void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *report, uint16_t len)
