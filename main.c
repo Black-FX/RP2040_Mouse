@@ -85,14 +85,6 @@ volatile int16_t mouseDistanceY = 0; // Distance left for mouse to move
 struct repeating_timer timer1;
 struct repeating_timer timer2;
 
-void gpio_set_mode_open_drain(uint gpio)
-{
-  // enable output on gpio (inverting)
-  gpio_set_oeover(gpio, 0x1);
-  // set output signal for gpio: drive output low
-  gpio_set_outover(gpio, 0x2);
-}
-
 void core1_main()
 {
   sleep_ms(10);
@@ -146,6 +138,7 @@ bool timer1_callback(struct repeating_timer *t)
     // Decrement the distance left to move
     mouseDistanceX--;
   }
+  
   return true;
 }
 
