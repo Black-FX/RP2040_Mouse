@@ -34,10 +34,11 @@
 // Override default USB pin
 #define PIO_USB_DP_PIN_DEFAULT 8
 
-#define VERSION "0.1"
 // Configure RP2040 for slower flash
 #define PICO_XOSC_STARTUP_DELAY_MULTIPLIER 64
 #define PICO_BOOT_STAGE2_CHOOSE_GENERIC_03H 1
+
+#define VERSION "0.3"
 
 #include "pio_usb.h"
 #include "tusb.h"
@@ -246,7 +247,7 @@ void initialiseHardware(void)
   // Initalize the pins
   gpio_init(XA_PIN);
   gpio_init(XB_PIN);
-  gpio_init(YB_PIN);
+  gpio_init(YA_PIN);
   gpio_init(YB_PIN);
   gpio_init(STATUS_PIN);
 
