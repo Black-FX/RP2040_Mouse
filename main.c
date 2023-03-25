@@ -86,6 +86,14 @@ volatile int16_t mouseDistanceY = 0; // Distance left for mouse to move
 struct repeating_timer timer1;
 struct repeating_timer timer2;
 
+#ifdef DEBUG
+# define DEBUG_PRINT(x) printf x
+# define CFG_TUSB_DEBUG 3
+#else
+# define DEBUG_PRINT(x) do {} while (0)
+# define CFG_TUSB_DEBUG 0
+#endif
+
 void core1_main()
 {
   sleep_ms(10);
@@ -209,27 +217,27 @@ int main()
   int __unused actual = uart_set_baudrate(UART_ID, BAUD_RATE);
   uart_set_hw_flow(UART_ID, false, false);
   uart_set_format(UART_ID, DATA_BITS, STOP_BITS, PARITY);
-  printf("\033[2J");
-  printf("****************************************************\r\n");
-  printf("*         RP2040 USB To Quadrature Adapter         *\r\n");
-  printf("*         Copyright 2022 Darren Jones              *\r\n");
-  printf("*         (nz.darren.jones@gmail.com)              *\r\n");
-  printf("*         Version: %s                             *\r\n", VERSION);
-  printf("*         Build Date: %s %s         *\r\n", __DATE__, __TIME__);
-  printf("****************************************************\r\n");
-  printf("\r\n");
-  printf("RP2040 USB To Quadrature Booting.....\r\n");
+  DEBUG_PRINT(("\033[2J"));
+  DEBUG_PRINT(("****************************************************\r\n"));
+  DEBUG_PRINT(("*         RP2040 USB To Quadrature Adapter         *\r\n"));
+  DEBUG_PRINT(("*         Copyright 2022 Darren Jones              *\r\n"));
+  DEBUG_PRINT(("*         (nz.darren.jones@gmail.com)              *\r\n"));
+  DEBUG_PRINT(("*         Version: %s                             *\r\n", VERSION));
+  DEBUG_PRINT(("*         Build Date: %s %s         *\r\n", __DATE__, __TIME__));
+  DEBUG_PRINT(("****************************************************\r\n"));
+  DEBUG_PRINT(("\r\n"));
+  DEBUG_PRINT(("RP2040 USB To Quadrature Booting.....\r\n"));
 
   // all USB task run in core1
   multicore_reset_core1();
-  printf("Core1 Reset\r\n");
+  DEBUG_PRINT(("Core1 Reset\r\n"));
 
   multicore_launch_core1(core1_main);
-  printf("Core1 Launched\r\n");
+  DEBUG_PRINT(("Core1 Launched\r\n"));
 
   // Initialise the RP2040 hardware
   initialiseHardware();
-  printf("Hardware Initalized\r\n");
+  DEBUG_PRINT(("Hardware Initalized\r\n"));
 
   // Blink Status LED and wait for everything to settle
   blink_status(10);
@@ -250,13 +258,15 @@ void initialiseHardware(void)
   gpio_init(YA_PIN);
   gpio_init(YB_PIN);
   gpio_init(STATUS_PIN);
-
+  DEBUG_PRINT(("Pins initalised\r\n"));
+  
   // Set pin directions
   gpio_set_dir(XA_PIN, GPIO_OUT);
   gpio_set_dir(XB_PIN, GPIO_OUT);
   gpio_set_dir(YA_PIN, GPIO_OUT);
   gpio_set_dir(YB_PIN, GPIO_OUT);
   gpio_set_dir(STATUS_PIN, GPIO_OUT);
+  DEBUG_PRINT(("Pin directions set\r\n"));
 
   // Set the pins low
   gpio_put(XA_PIN, 0);
@@ -264,6 +274,7 @@ void initialiseHardware(void)
   gpio_put(YA_PIN, 0);
   gpio_put(YB_PIN, 0);
   gpio_put(STATUS_PIN, 0);
+  DEBUG_PRINT(("Pins pulled low\r\n"));
 
 }
 
@@ -277,14 +288,12 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
 {
   (void)desc_report;
   (void)desc_len;
-  printf("Device Attached\r\n");
+  DEBUG_PRINT(("USB Device Attached\r\n"));
 
   // Interface protocol (hid_interface_protocol_enum_t)
   uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
 
-  char output[255];
-  sprintf(output, "Protocol: %d\r\n", itf_protocol);
-  printf(output);
+  DEBUG_PRINT(("Protocol: %d\r\n", itf_protocol));
 
   // Receive report from boot mouse only
   // tuh_hid_report_received_cb() will be invoked when report is available
@@ -294,7 +303,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
     {
       add_repeating_timer_ms(-1, timer1_callback, NULL, &timer1);
       add_repeating_timer_ms(-1, timer2_callback, NULL, &timer2);
-      printf("Timers Running\r\n");
+      DEBUG_PRINT(("Mouse Timers Running\r\n"));
       blink_status(3);
     }
   }
@@ -306,12 +315,14 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
   (void)dev_addr;
   (void)instance;
-  printf("Device Removed\r\n");
+  DEBUG_PRINT(("USB Device Removed\r\n"));
   gpio_put(STATUS_PIN, 0); // Turn status LED off
   bool cancelled = cancel_repeating_timer(&timer1);
-  printf("Timer1 Cancelled... %d\r\n", cancelled);
+  DEBUG_PRINT(("Mouse Timer1 Cancelled... %d\r\n", cancelled));
+  (void)cancelled;
   cancelled = cancel_repeating_timer(&timer2);
-  printf("Timer2 Cancelled... %d\r\n", cancelled);
+  DEBUG_PRINT(("Mouse Timer2 Cancelled... %d\r\n", cancelled));
+  (void)cancelled;
 }
 
 static void processMouse(uint8_t dev_addr, hid_mouse_report_t const *report)
@@ -325,8 +336,8 @@ static void processMouse(uint8_t dev_addr, hid_mouse_report_t const *report)
     gpio_init(MB_PIN);
     gpio_set_dir(MB_PIN,GPIO_OUT);
     gpio_put(MB_PIN, 1);
-    printf("Wheel %02x\r\n", report->wheel);
     processMouseMovement(report->wheel, MOUSEY);
+    DEBUG_PRINT(("Wheel movement %d\r\n", report->wheel));
     gpio_deinit(MB_PIN);
   }
 
@@ -337,6 +348,7 @@ static void processMouse(uint8_t dev_addr, hid_mouse_report_t const *report)
     gpio_init(LB_PIN);
     gpio_set_dir(LB_PIN,GPIO_OUT);
     gpio_put(LB_PIN, 0);
+    DEBUG_PRINT(("Left button press\r\n"));
   }
   else
   {
@@ -349,6 +361,7 @@ static void processMouse(uint8_t dev_addr, hid_mouse_report_t const *report)
     gpio_init(MB_PIN);
     gpio_set_dir(MB_PIN,GPIO_OUT);
     gpio_put(MB_PIN, 0);
+    DEBUG_PRINT(("Middle button press\r\n"));
   }
   else
   {
@@ -361,6 +374,7 @@ static void processMouse(uint8_t dev_addr, hid_mouse_report_t const *report)
     gpio_init(RB_PIN);
     gpio_set_dir(RB_PIN,GPIO_OUT);
     gpio_put(RB_PIN, 0);
+    DEBUG_PRINT(("Right button press\r\n"));
   }
   else
   {
@@ -372,22 +386,26 @@ static void processMouse(uint8_t dev_addr, hid_mouse_report_t const *report)
   {
     mouseDistanceX = 0;
     mouseDirectionX = 1;
+    DEBUG_PRINT(("Mouse Movement X++\r\n"));
   }
   else if (report->x < 0 && mouseDirectionX == 1)
   {
     mouseDistanceX = 0;
     mouseDirectionX = 0;
+    DEBUG_PRINT(("Mouse Movement X--\r\n"));
   }
 
   if (report->y > 0 && mouseDirectionY == 0)
   {
     mouseDistanceY = 0;
     mouseDirectionY = 1;
+    DEBUG_PRINT(("Mouse Movement Y++\r\n"));
   }
   else if (report->y < 0 && mouseDirectionY == 1)
   {
     mouseDistanceY = 0;
     mouseDirectionY = 0;
+    DEBUG_PRINT(("Mouse Movement Y--\r\n"));
   }
 
   // Process mouse X and Y movement
@@ -399,7 +417,6 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
 {
   (void)len;
   uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
-
   switch (itf_protocol)
   {
   case HID_ITF_PROTOCOL_MOUSE:
