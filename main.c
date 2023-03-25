@@ -38,7 +38,7 @@
 #define PICO_XOSC_STARTUP_DELAY_MULTIPLIER 64
 #define PICO_BOOT_STAGE2_CHOOSE_GENERIC_03H 1
 
-#define VERSION "0.3"
+#define VERSION "1.0"
 
 #include "pio_usb.h"
 #include "tusb.h"
@@ -299,6 +299,8 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
   // tuh_hid_report_received_cb() will be invoked when report is available
   if (itf_protocol == HID_ITF_PROTOCOL_MOUSE)
   {
+    // Set protocol to full report mode for mouse wheel support
+    tuh_hid_set_protocol(dev_addr, instance, 1);
     if (tuh_hid_receive_report(dev_addr, instance))
     {
       add_repeating_timer_ms(-1, timer1_callback, NULL, &timer1);
@@ -335,9 +337,11 @@ static void processMouse(uint8_t dev_addr, hid_mouse_report_t const *report)
   {
     gpio_init(MB_PIN);
     gpio_set_dir(MB_PIN,GPIO_OUT);
-    gpio_put(MB_PIN, 1);
+    gpio_put(MB_PIN, 0);
     processMouseMovement(report->wheel, MOUSEY);
+    sleep_ms(100);
     DEBUG_PRINT(("Wheel movement %d\r\n", report->wheel));
+  } else {
     gpio_deinit(MB_PIN);
   }
 
