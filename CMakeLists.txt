@@ -18,6 +18,13 @@ target_sources(${target_name} PRIVATE
 
  pico_enable_stdio_uart(${target_name} 1)
  pico_enable_stdio_usb(${target_name} 0)
+
+# set info for picotool
+
+pico_set_program_name(rp2040_mouse "RP2040 Mouse")
+pico_set_program_description(rp2040_mouse "RP2040 Based USB to Quadrature mouse adaptor for retro computers")
+pico_set_program_version(rp2040_mouse "1.0")
+pico_set_program_url(rp2040_mouse "https://github.com/Black-FX/RP2040_Mouse")
  
 # print memory usage, enable all warnings
 target_link_options(${target_name} PRIVATE -Xlinker --print-memory-usage)

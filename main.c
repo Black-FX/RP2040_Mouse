@@ -30,6 +30,7 @@
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
 #include "pico/bootrom.h"
+#include "pico/binary_info.h"
 
 // Override default USB pin
 #define PIO_USB_DP_PIN_DEFAULT 8
@@ -87,11 +88,14 @@ struct repeating_timer timer1;
 struct repeating_timer timer2;
 
 #ifdef DEBUG
-# define DEBUG_PRINT(x) printf x
-# define CFG_TUSB_DEBUG 3
+#define DEBUG_PRINT(x) printf x
+#define CFG_TUSB_DEBUG 3
 #else
-# define DEBUG_PRINT(x) do {} while (0)
-# define CFG_TUSB_DEBUG 0
+#define DEBUG_PRINT(x) \
+  do                   \
+  {                    \
+  } while (0)
+#define CFG_TUSB_DEBUG 0
 #endif
 
 void core1_main()
@@ -147,7 +151,7 @@ bool timer1_callback(struct repeating_timer *t)
     // Decrement the distance left to move
     mouseDistanceX--;
   }
-  
+
   return true;
 }
 
@@ -191,9 +195,9 @@ bool timer2_callback(struct repeating_timer *t)
 
 static void blink_status(uint8_t count)
 {
-uint8_t i=0;
-gpio_put(STATUS_PIN, 0);
-  
+  uint8_t i = 0;
+  gpio_put(STATUS_PIN, 0);
+
   while (i < count)
   {
     sleep_ms(200);
@@ -210,13 +214,15 @@ int main()
   set_sys_clock_khz(120000, true);
   stdio_init_all();
 
-  // Setup Debug to UART
-  uart_init(UART_ID, 2400);
+// Setup Debug to UART
+#ifdef DEBUG
   gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
   gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
+  uart_init(UART_ID, 2400);
   int __unused actual = uart_set_baudrate(UART_ID, BAUD_RATE);
   uart_set_hw_flow(UART_ID, false, false);
   uart_set_format(UART_ID, DATA_BITS, STOP_BITS, PARITY);
+#endif
   DEBUG_PRINT(("\033[2J"));
   DEBUG_PRINT(("****************************************************\r\n"));
   DEBUG_PRINT(("*         RP2040 USB To Quadrature Adapter         *\r\n"));
@@ -252,6 +258,20 @@ int main()
 
 void initialiseHardware(void)
 {
+  // Document pins for picotool
+  bi_decl(bi_1pin_with_name(XA_PIN, "X1 Quadrature Output"));
+  bi_decl(bi_1pin_with_name(XB_PIN, "X2 Quadrature Output"));
+  bi_decl(bi_1pin_with_name(YA_PIN, "Y1 Quadrature Output"));
+  bi_decl(bi_1pin_with_name(YB_PIN, "Y2 Quadrature Output"));
+  bi_decl(bi_1pin_with_name(RB_PIN, "Right Mouse Button"));
+  bi_decl(bi_1pin_with_name(MB_PIN, "Middle Mouse Button"));
+  bi_decl(bi_1pin_with_name(LB_PIN, "Left Mouse Button"));
+  bi_decl(bi_1pin_with_name(UART_TX_PIN, "UART TX"));
+  bi_decl(bi_1pin_with_name(UART_RX_PIN, "UART RX"));
+  bi_decl(bi_1pin_with_name(PIO_USB_DP_PIN_DEFAULT, "PIO USB D+"));
+  bi_decl(bi_1pin_with_name(PIO_USB_DP_PIN_DEFAULT + 1, "PIO USB D-"));
+  bi_decl(bi_1pin_with_name(STATUS_PIN, "Status LED"));
+
   // Initalize the pins
   gpio_init(XA_PIN);
   gpio_init(XB_PIN);
@@ -259,7 +279,7 @@ void initialiseHardware(void)
   gpio_init(YB_PIN);
   gpio_init(STATUS_PIN);
   DEBUG_PRINT(("Pins initalised\r\n"));
-  
+
   // Set pin directions
   gpio_set_dir(XA_PIN, GPIO_OUT);
   gpio_set_dir(XB_PIN, GPIO_OUT);
@@ -275,9 +295,7 @@ void initialiseHardware(void)
   gpio_put(YB_PIN, 0);
   gpio_put(STATUS_PIN, 0);
   DEBUG_PRINT(("Pins pulled low\r\n"));
-
 }
-
 
 //--------------------------------------------------------------------+
 // Host HID
@@ -336,12 +354,14 @@ static void processMouse(uint8_t dev_addr, hid_mouse_report_t const *report)
   if (report->wheel)
   {
     gpio_init(MB_PIN);
-    gpio_set_dir(MB_PIN,GPIO_OUT);
+    gpio_set_dir(MB_PIN, GPIO_OUT);
     gpio_put(MB_PIN, 0);
     processMouseMovement(report->wheel, MOUSEY);
     sleep_ms(100);
     DEBUG_PRINT(("Wheel movement %d\r\n", report->wheel));
-  } else {
+  }
+  else
+  {
     gpio_deinit(MB_PIN);
   }
 
@@ -350,7 +370,7 @@ static void processMouse(uint8_t dev_addr, hid_mouse_report_t const *report)
   if (report->buttons & MOUSE_BUTTON_LEFT)
   {
     gpio_init(LB_PIN);
-    gpio_set_dir(LB_PIN,GPIO_OUT);
+    gpio_set_dir(LB_PIN, GPIO_OUT);
     gpio_put(LB_PIN, 0);
     DEBUG_PRINT(("Left button press\r\n"));
   }
@@ -363,7 +383,7 @@ static void processMouse(uint8_t dev_addr, hid_mouse_report_t const *report)
   if (report->buttons & MOUSE_BUTTON_MIDDLE)
   {
     gpio_init(MB_PIN);
-    gpio_set_dir(MB_PIN,GPIO_OUT);
+    gpio_set_dir(MB_PIN, GPIO_OUT);
     gpio_put(MB_PIN, 0);
     DEBUG_PRINT(("Middle button press\r\n"));
   }
@@ -376,7 +396,7 @@ static void processMouse(uint8_t dev_addr, hid_mouse_report_t const *report)
   if (report->buttons & MOUSE_BUTTON_RIGHT)
   {
     gpio_init(RB_PIN);
-    gpio_set_dir(RB_PIN,GPIO_OUT);
+    gpio_set_dir(RB_PIN, GPIO_OUT);
     gpio_put(RB_PIN, 0);
     DEBUG_PRINT(("Right button press\r\n"));
   }
